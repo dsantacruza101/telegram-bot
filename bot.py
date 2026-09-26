@@ -7,14 +7,21 @@ import logging
 import os
 import time
 
+import httpx
 import psutil
 from telegram import Update
+from telegram.error import NetworkError, TimedOut
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s — %(message)s", level=logging.INFO
 )
 logger = logging.getLogger("server-bot")
+
+# httpx/httpcore loguean cada request con la URL completa de la API de
+# Telegram, que incluye el token del bot; en WARNING dejan de hacerlo.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = int(os.getenv("CHAT_ID"))
@@ -238,7 +245,48 @@ async def chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await reply(update, pre(out[:3500]), parse_mode="HTML")
 
+TRANSIENT_WINDOW = 600  # 10 minutos
+TRANSIENT_THRESHOLD = 3
+_TRANSIENT_MESSAGES = ("Bad Gateway", "Gateway Timeout", "Service Unavailable")
+
+# Ventana fija: arranca en el primer error transitorio y se reinicia sola
+# cuando pasan 10 min sin que se vuelva a llamar aquí.
+_transient_state = {"count": 0, "window_start": 0.0, "notified": False}
+
+def is_transient_error(error: BaseException) -> bool:
+    if isinstance(error, (NetworkError, TimedOut, httpx.ReadError, httpx.ConnectError, httpx.RemoteProtocolError)):
+        return True
+    text = str(error)
+    return any(marker in text for marker in _TRANSIENT_MESSAGES)
+
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
+    error = context.error
+
+    # Caidas de red pasajeras (Telegram/Cloudflare) no ameritan spamear el
+    # chat cada vez; solo si se acumulan varias en poco tiempo.
+    if is_transient_error(error):
+        logger.warning("Error de red transitorio: %s", redact(str(error)))
+
+        now = time.time()
+        state = _transient_state
+        if now - state["window_start"] > TRANSIENT_WINDOW:
+            state["window_start"] = now
+            state["count"] = 0
+            state["notified"] = False
+        state["count"] += 1
+
+        if state["count"] >= TRANSIENT_THRESHOLD and not state["notified"]:
+            state["notified"] = True
+            try:
+                await context.bot.send_message(
+                    CHAT_ID,
+                    f"⚠️ Alfred: problemas de conexion con Telegram "
+                    f"({state['count']} errores en 10 min)",
+                )
+            except Exception:
+                logger.exception("No se pudo notificar el error por Telegram")
+        return
+
     logger.error("Error en handler", exc_info=context.error)
     try:
         await context.bot.send_message(
