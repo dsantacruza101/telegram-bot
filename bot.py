@@ -5,6 +5,7 @@ import hmac
 import html
 import logging
 import os
+import sys
 import time
 
 import httpx
@@ -101,7 +102,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/disk — Uso del disco\n"
         "/ip — IP pública\n"
         "/claude &lt;tarea&gt; — Delegar a Claude Code\n"
-        "/chat inicio|fin — Modo conversación con Claude Code",
+        "/chat inicio|fin — Modo conversación con Claude Code\n\n"
+        "💳 Tarjetas:\n"
+        "/tarjetas — Lista de tarjetas\n"
+        "/tarjeta &lt;apodo&gt; — Detalle de una tarjeta\n"
+        "/proxcorte — Próximo corte\n"
+        "/nuevatarjeta — Agregar tarjeta\n"
+        "/editartarjeta &lt;apodo&gt; — Editar tarjeta\n"
+        "/borrartarjeta &lt;apodo&gt; — Borrar tarjeta\n"
+        "/cancelar — Salir de un asistente",
         parse_mode="HTML"
     )
 
@@ -298,6 +307,11 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
         logger.exception("No se pudo notificar el error por Telegram")
 
 def main():
+    # Al correr como script este módulo es __main__; el alias evita que el
+    # `from bot import ...` de tarjetas_handlers cargue una segunda copia.
+    sys.modules.setdefault("bot", sys.modules[__name__])
+    from tarjetas_handlers import register_tarjetas
+
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("status", status))
@@ -308,6 +322,9 @@ def main():
     app.add_handler(CommandHandler("ip", ip))
     app.add_handler(CommandHandler("claude", claude_task))
     app.add_handler(CommandHandler("chat", chat))
+    # Antes de chat_message: las conversaciones de tarjetas tienen prioridad
+    # sobre el modo chat para los mensajes de texto.
+    register_tarjetas(app)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat_message))
     app.add_error_handler(on_error)
     logger.info("🤖 Bot corriendo...")
