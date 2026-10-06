@@ -2,19 +2,30 @@ name: CI Pipeline - Alfred Bot
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "dev"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "dev"]
 
 jobs:
   sonarcloud:
-    name: SonarCloud Analysis
+    name: Tests + SonarCloud Analysis
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests with coverage
+        run: pytest --cov=. --cov-report=xml
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
