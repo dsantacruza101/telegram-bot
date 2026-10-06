@@ -57,5 +57,8 @@ python3 -m venv .venv-dev && .venv-dev/bin/pip install -r requirements-dev.txt
 .venv-dev/bin/pytest
 ```
 
+`requirements-dev.lock` (con hashes) lo usa el CI; se regenera con
+`pip-compile --generate-hashes --allow-unsafe --strip-extras -o requirements-dev.lock requirements-dev.txt`.
+
 Los tests no usan red (HTTP mockeado con respx). Producción usa `venv/` con `requirements.txt`.
 Ramas: `main` producción, `dev` desarrollo; commits en español (conventional commits).

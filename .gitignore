@@ -4,7 +4,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.save
-.venv-dev/
+.venv*/
 .pytest_cache/
 .coverage
 coverage.xml
