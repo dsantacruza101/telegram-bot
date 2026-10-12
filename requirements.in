@@ -1,0 +1,5 @@
+# Dependencias directas: solo los paquetes que el codigo importa.
+# Las versiones salen de requirements.txt.
+httpx                          # httpx
+psutil                         # psutil
+python-telegram-bot[job-queue] # telegram (JobQueue para recordatorios de tarjetas)
